@@ -1,0 +1,16 @@
+Internet Systems Consortium DHCP Server 4.4.1
+Copyright 2004-2018 Internet Systems Consortium.
+All rights reserved.
+For info, please visit https://www.isc.org/software/dhcp/
+Config file: /etc/dhcp/dhcpd-pc4.conf
+Database file: /var/lib/dhcp/dhcpd.leases-pc4
+PID file: /run/dhcpd.pid
+Wrote 0 leases to leases file.
+Listening on LPF/eth0/9a:6b:67:cd:00:b7/192.168.100.0/24
+Sending on   LPF/eth0/9a:6b:67:cd:00:b7/192.168.100.0/24
+Sending on   Socket/fallback/fallback-net
+Server starting service.
+DHCPDISCOVER from 32:8e:34:d8:ee:3d via eth0
+DHCPOFFER on 192.168.100.200 to 32:8e:34:d8:ee:3d (pc2-client) via eth0
+DHCPREQUEST for 192.168.100.200 (192.168.100.253) from 32:8e:34:d8:ee:3d (pc2-client) via eth0
+DHCPACK on 192.168.100.200 to 32:8e:34:d8:ee:3d (pc2-client) via eth0

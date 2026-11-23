@@ -1,0 +1,438 @@
+##### 1. Мережеві параметри PC1
+diana_siukalo
+ubuntu-kpi
+Mon 23 Nov 19:26:30 EET 2026
+Ubuntu 22.04.5 LTS
+PC1# ip -br -4 addr
+lo               UNKNOWN        127.0.0.1/8 
+enp0s3           UP             10.0.2.15/24 
+pc3-link@if2     UP             10.20.0.1/24 
+PC1# ip -br link show br-lab
+br-lab           UP             8e:c1:fb:7f:81:19 <BROADCAST,MULTICAST,UP,LOWER_UP> 
+##### 2. Статичне налаштування IP
+PC1# ip addr add 192.168.100.1/24 dev br-lab
+PC2# ip addr add 192.168.100.50/24 dev eth0
+PC2# ip -4 addr show eth0
+2: eth0@if4: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default qlen 1000 link-netnsid 0
+    inet 192.168.100.50/24 scope global eth0
+       valid_lft forever preferred_lft forever
+PC2# ip route
+192.168.100.0/24 dev eth0 proto kernel scope link src 192.168.100.50 
+PC2# ping -c 3 192.168.100.1
+PING 192.168.100.1 (192.168.100.1) 56(84) bytes of data.
+64 bytes from 192.168.100.1: icmp_seq=1 ttl=64 time=0.049 ms
+64 bytes from 192.168.100.1: icmp_seq=2 ttl=64 time=0.094 ms
+64 bytes from 192.168.100.1: icmp_seq=3 ttl=64 time=0.089 ms
+
+--- 192.168.100.1 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2237ms
+rtt min/avg/max/mdev = 0.049/0.077/0.094/0.020 ms
+##### 3. Налаштування DHCP-сервера
+PC1# cat /etc/default/isc-dhcp-server
+INTERFACESv4="br-lab"
+INTERFACESv6=""
+PC1# cat /etc/dhcp/dhcpd.conf
+authoritative;
+default-lease-time 600;
+max-lease-time 7200;
+option subnet-mask 255.255.255.0;
+option broadcast-address 192.168.100.255;
+option routers 192.168.100.1;
+option domain-name-servers 192.168.100.1, 8.8.8.8;
+option domain-name "mydomain.example";
+
+subnet 192.168.100.0 netmask 255.255.255.0 {
+  range 192.168.100.10 192.168.100.20;
+}
+PC1# dhcpd -t -cf /etc/dhcp/dhcpd.conf 2>&1 | tail -4
+For info, please visit https://www.isc.org/software/dhcp/
+Config file: /etc/dhcp/dhcpd.conf
+Database file: /var/lib/dhcp/dhcpd.leases
+PID file: /var/run/dhcpd.pid
+##### 4. Запуск DHCP-сервера
+PC1# systemctl restart isc-dhcp-server
+PC1# systemctl status isc-dhcp-server --no-pager -l | cut -c1-130
+● isc-dhcp-server.service - ISC DHCP IPv4 server
+     Loaded: loaded (/lib/systemd/system/isc-dhcp-server.service; disabled; vendor preset: enabled)
+     Active: active (running) since Mon 2026-11-23 19:26:44 EET; 2s ago
+       Docs: man:dhcpd(8)
+   Main PID: 2343 (dhcpd)
+      Tasks: 4 (limit: 4606)
+     Memory: 4.5M
+        CPU: 32ms
+     CGroup: /system.slice/isc-dhcp-server.service
+             └─2343 dhcpd -user dhcpd -group dhcpd -f -4 -pf /run/dhcp-server/dhcpd.pid -cf /etc/dhcp/dhcpd.conf br-lab
+
+Nov 23 19:26:44 ubuntu-kpi dhcpd[2343]: Database file: /var/lib/dhcp/dhcpd.leases
+Nov 23 19:26:44 ubuntu-kpi dhcpd[2343]: PID file: /run/dhcp-server/dhcpd.pid
+Nov 23 19:26:44 ubuntu-kpi dhcpd[2343]: Wrote 0 leases to leases file.
+Nov 23 19:26:44 ubuntu-kpi dhcpd[2343]: Listening on LPF/br-lab/8e:c1:fb:7f:81:19/192.168.100.0/24
+Nov 23 19:26:44 ubuntu-kpi sh[2343]: Listening on LPF/br-lab/8e:c1:fb:7f:81:19/192.168.100.0/24
+Nov 23 19:26:44 ubuntu-kpi sh[2343]: Sending on   LPF/br-lab/8e:c1:fb:7f:81:19/192.168.100.0/24
+Nov 23 19:26:44 ubuntu-kpi sh[2343]: Sending on   Socket/fallback/fallback-net
+Nov 23 19:26:44 ubuntu-kpi dhcpd[2343]: Sending on   LPF/br-lab/8e:c1:fb:7f:81:19/192.168.100.0/24
+Nov 23 19:26:44 ubuntu-kpi dhcpd[2343]: Sending on   Socket/fallback/fallback-net
+Nov 23 19:26:44 ubuntu-kpi dhcpd[2343]: Server starting service.
+##### 5. Динамічне отримання IP (PC2)
+PC2# dhclient -1 -v -cf /etc/dhcp/dhclient-lab3.conf -lf /var/lib/dhcp/dhclient-lab3.leases -pf /run/dhclient-lab3.pid eth0
+Internet Systems Consortium DHCP Client 4.4.1
+Copyright 2004-2018 Internet Systems Consortium.
+All rights reserved.
+For info, please visit https://www.isc.org/software/dhcp/
+
+Listening on LPF/eth0/32:8e:34:d8:ee:3d
+Sending on   LPF/eth0/32:8e:34:d8:ee:3d
+Sending on   Socket/fallback
+DHCPDISCOVER on eth0 to 255.255.255.255 port 67 interval 3 (xid=0xcb52f140)
+DHCPOFFER of 192.168.100.10 from 192.168.100.1
+DHCPREQUEST for 192.168.100.10 on eth0 to 255.255.255.255 port 67 (xid=0x40f152cb)
+DHCPACK of 192.168.100.10 from 192.168.100.1 (xid=0xcb52f140)
+bound to 192.168.100.10 -- renewal in 241 seconds.
+##### 6. Результат на PC2 та файл dhcpd.leases
+PC2# ip -4 addr show eth0
+2: eth0@if4: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default qlen 1000 link-netnsid 0
+    inet 192.168.100.10/24 brd 192.168.100.255 scope global dynamic eth0
+       valid_lft 587sec preferred_lft 587sec
+PC2# ip route
+default via 192.168.100.1 dev eth0 
+192.168.100.0/24 dev eth0 proto kernel scope link src 192.168.100.10 
+PC1# grep -vE '^#|^$' /var/lib/dhcp/dhcpd.leases
+authoring-byte-order little-endian;
+server-duid "\000\001\000\0012\2273\324\216\301\373\177\201\031";
+lease 192.168.100.10 {
+  starts 1 2026/11/23 17:27:04;
+  ends 1 2026/11/23 17:37:04;
+  cltt 1 2026/11/23 17:27:04;
+  binding state active;
+  next binding state free;
+  rewind binding state free;
+  hardware ethernet 32:8e:34:d8:ee:3d;
+  client-hostname "pc2-client";
+}
+##### 7. Параметри DHCPACK (tshark)
+PC1# tshark -r /home/diana_siukalo/lab3_out/dora.pcap -Y dhcp 2>/dev/null
+    4   5.435772      0.0.0.0 → 255.255.255.255 DHCP 342 DHCP Discover - Transaction ID 0xcb52f140
+    6   6.444682 192.168.100.1 → 192.168.100.10 DHCP 344 DHCP Offer    - Transaction ID 0xcb52f140
+    7   6.448943      0.0.0.0 → 255.255.255.255 DHCP 342 DHCP Request  - Transaction ID 0xcb52f140
+    9   6.465064 192.168.100.1 → 192.168.100.10 DHCP 344 DHCP ACK      - Transaction ID 0xcb52f140
+PC1# tshark -r /home/diana_siukalo/lab3_out/dora.pcap -Y dhcp.option.dhcp==5 -V 2>/dev/null | grep -E 'Your .client|Option: |Renewal Time|Lease Time:|DHCP Server Identifier:|Router:|Subnet Mask:|Domain Name Server:|Domain Name:' | head -30
+    Your (client) IP address: 192.168.100.10
+    Option: (53) DHCP Message Type (ACK)
+    Option: (54) DHCP Server Identifier (192.168.100.1)
+        DHCP Server Identifier: 192.168.100.1
+    Option: (51) IP Address Lease Time
+        IP Address Lease Time: (600s) 10 minutes
+    Option: (1) Subnet Mask (255.255.255.0)
+        Subnet Mask: 255.255.255.0
+    Option: (28) Broadcast Address (192.168.100.255)
+    Option: (3) Router
+        Router: 192.168.100.1
+    Option: (15) Domain Name
+        Domain Name: mydomain.example
+    Option: (6) Domain Name Server
+        Domain Name Server: 192.168.100.1
+        Domain Name Server: 8.8.8.8
+    Option: (255) End
+##### 7а. Звільнення адреси та повторне отримання
+PC2# dhclient -r -v -cf /etc/dhcp/dhclient-lab3.conf -lf /var/lib/dhcp/dhclient-lab3.leases -pf /run/dhclient-lab3.pid eth0
+Killed old client process
+Internet Systems Consortium DHCP Client 4.4.1
+Copyright 2004-2018 Internet Systems Consortium.
+All rights reserved.
+For info, please visit https://www.isc.org/software/dhcp/
+
+Listening on LPF/eth0/32:8e:34:d8:ee:3d
+Sending on   LPF/eth0/32:8e:34:d8:ee:3d
+Sending on   Socket/fallback
+DHCPRELEASE of 192.168.100.10 on eth0 to 192.168.100.1 port 67 (xid=0x104a00f3)
+PC2# ip -br -4 addr show eth0
+PC2# dhclient -1 -v -cf /etc/dhcp/dhclient-lab3.conf -lf /var/lib/dhcp/dhclient-lab3.leases -pf /run/dhclient-lab3.pid eth0
+Internet Systems Consortium DHCP Client 4.4.1
+Copyright 2004-2018 Internet Systems Consortium.
+All rights reserved.
+For info, please visit https://www.isc.org/software/dhcp/
+
+Listening on LPF/eth0/32:8e:34:d8:ee:3d
+Sending on   LPF/eth0/32:8e:34:d8:ee:3d
+Sending on   Socket/fallback
+DHCPDISCOVER on eth0 to 255.255.255.255 port 67 interval 3 (xid=0x105d5427)
+DHCPOFFER of 192.168.100.10 from 192.168.100.1
+DHCPREQUEST for 192.168.100.10 on eth0 to 255.255.255.255 port 67 (xid=0x27545d10)
+DHCPACK of 192.168.100.10 from 192.168.100.1 (xid=0x105d5427)
+bound to 192.168.100.10 -- renewal in 278 seconds.
+PC1# journalctl -u isc-dhcp-server --no-pager -o cat | grep ^DHCP | tail -5
+DHCPRELEASE of 192.168.100.10 from 32:8e:34:d8:ee:3d (pc2-client) via br-lab (found)
+DHCPDISCOVER from 32:8e:34:d8:ee:3d via br-lab
+DHCPOFFER on 192.168.100.10 to 32:8e:34:d8:ee:3d (pc2-client) via br-lab
+DHCPREQUEST for 192.168.100.10 (192.168.100.1) from 32:8e:34:d8:ee:3d (pc2-client) via br-lab
+DHCPACK on 192.168.100.10 to 32:8e:34:d8:ee:3d (pc2-client) via br-lab
+##### 8. ping: шлюз, інша підмережа, Інтернет
+PC2# ping -c 3 192.168.100.1
+PING 192.168.100.1 (192.168.100.1) 56(84) bytes of data.
+64 bytes from 192.168.100.1: icmp_seq=1 ttl=64 time=0.115 ms
+64 bytes from 192.168.100.1: icmp_seq=2 ttl=64 time=0.136 ms
+64 bytes from 192.168.100.1: icmp_seq=3 ttl=64 time=0.085 ms
+
+--- 192.168.100.1 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2149ms
+rtt min/avg/max/mdev = 0.085/0.112/0.136/0.020 ms
+PC2# ping -c 3 10.20.0.2
+PING 10.20.0.2 (10.20.0.2) 56(84) bytes of data.
+64 bytes from 10.20.0.2: icmp_seq=1 ttl=63 time=0.060 ms
+64 bytes from 10.20.0.2: icmp_seq=2 ttl=63 time=0.084 ms
+64 bytes from 10.20.0.2: icmp_seq=3 ttl=63 time=0.057 ms
+
+--- 10.20.0.2 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2034ms
+rtt min/avg/max/mdev = 0.057/0.067/0.084/0.012 ms
+PC1# ping -c 3 8.8.8.8
+PING 8.8.8.8 (8.8.8.8) 56(84) bytes of data.
+64 bytes from 8.8.8.8: icmp_seq=1 ttl=255 time=18.5 ms
+64 bytes from 8.8.8.8: icmp_seq=2 ttl=255 time=19.5 ms
+64 bytes from 8.8.8.8: icmp_seq=3 ttl=255 time=18.7 ms
+
+--- 8.8.8.8 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2029ms
+rtt min/avg/max/mdev = 18.529/18.909/19.500/0.423 ms
+##### 9. traceroute
+PC2# traceroute -n -w 1 10.20.0.2
+traceroute to 10.20.0.2 (10.20.0.2), 30 hops max, 60 byte packets
+ 1  192.168.100.1  0.041 ms  0.008 ms  0.006 ms
+ 2  10.20.0.2  0.016 ms  0.008 ms  0.007 ms
+PC1# traceroute -I -n -w 1 -q 1 -m 12 8.8.8.8
+traceroute to 8.8.8.8 (8.8.8.8), 12 hops max, 60 byte packets
+ 1  8.8.8.8  18.532 ms
+##### 10. Таблиці маршрутизації
+PC1# ip route
+default via 10.0.2.2 dev enp0s3 proto dhcp metric 100 
+10.0.2.0/24 dev enp0s3 proto kernel scope link src 10.0.2.15 metric 100 
+10.20.0.0/24 dev pc3-link proto kernel scope link src 10.20.0.1 
+169.254.0.0/16 dev enp0s3 scope link metric 1000 
+192.168.100.0/24 dev br-lab proto kernel scope link src 192.168.100.1 
+PC1# route -n
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+0.0.0.0         10.0.2.2        0.0.0.0         UG    100    0        0 enp0s3
+10.0.2.0        0.0.0.0         255.255.255.0   U     100    0        0 enp0s3
+10.20.0.0       0.0.0.0         255.255.255.0   U     0      0        0 pc3-link
+169.254.0.0     0.0.0.0         255.255.0.0     U     1000   0        0 enp0s3
+192.168.100.0   0.0.0.0         255.255.255.0   U     0      0        0 br-lab
+PC2# ip route
+default via 192.168.100.1 dev eth0 
+192.168.100.0/24 dev eth0 proto kernel scope link src 192.168.100.10 
+PC2# ip route get 10.20.0.2
+10.20.0.2 via 192.168.100.1 dev eth0 src 192.168.100.10 uid 0 
+    cache 
+PC1# ip route get 8.8.8.8
+8.8.8.8 via 10.0.2.2 dev enp0s3 src 10.0.2.15 uid 0 
+    cache 
+##### 11. Troubleshooting 1: немає шлюзу за замовчуванням
+PC2# ip route del default
+PC2# ping -c 2 -W 1 10.20.0.2
+ping: connect: Network is unreachable
+PC2# ip route
+192.168.100.0/24 dev eth0 proto kernel scope link src 192.168.100.10 
+PC2# ip route add default via 192.168.100.1
+PC2# ping -c 2 -W 1 10.20.0.2
+PING 10.20.0.2 (10.20.0.2) 56(84) bytes of data.
+64 bytes from 10.20.0.2: icmp_seq=1 ttl=63 time=0.047 ms
+64 bytes from 10.20.0.2: icmp_seq=2 ttl=63 time=0.119 ms
+
+--- 10.20.0.2 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1184ms
+rtt min/avg/max/mdev = 0.047/0.083/0.119/0.036 ms
+##### 12. Troubleshooting 2: вимкнено ip_forward на PC1
+PC1# sysctl -w net.ipv4.ip_forward=0
+net.ipv4.ip_forward = 0
+PC2# ping -c 2 -W 1 10.20.0.2
+PING 10.20.0.2 (10.20.0.2) 56(84) bytes of data.
+
+--- 10.20.0.2 ping statistics ---
+2 packets transmitted, 0 received, 100% packet loss, time 1038ms
+
+PC2# traceroute -n -w 1 -q 1 -m 3 10.20.0.2
+traceroute to 10.20.0.2 (10.20.0.2), 3 hops max, 60 byte packets
+ 1  *
+ 2  *
+ 3  *
+PC1# sysctl -w net.ipv4.ip_forward=1
+net.ipv4.ip_forward = 1
+PC2# ping -c 2 -W 1 10.20.0.2
+PING 10.20.0.2 (10.20.0.2) 56(84) bytes of data.
+64 bytes from 10.20.0.2: icmp_seq=1 ttl=63 time=0.046 ms
+64 bytes from 10.20.0.2: icmp_seq=2 ttl=63 time=0.074 ms
+
+--- 10.20.0.2 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1061ms
+rtt min/avg/max/mdev = 0.046/0.060/0.074/0.014 ms
+##### 13. ВАРІАНТ 2: у dhcpd.conf не вказано range
+PC1# sed -n '/^subnet/,$p' /etc/dhcp/dhcpd.conf
+subnet 192.168.100.0 netmask 255.255.255.0 {
+}
+PC1# dhcpd -t -cf /etc/dhcp/dhcpd.conf >/dev/null 2>&1; echo exit code: $?
+exit code: 0
+PC1# systemctl restart isc-dhcp-server
+PC1# systemctl is-active isc-dhcp-server
+active
+PC1# journalctl -u isc-dhcp-server --no-pager -o cat --since '2026-11-23 19:28:23' | tail -12 | cut -c1-120
+Database file: /var/lib/dhcp/dhcpd.leases
+PID file: /run/dhcp-server/dhcpd.pid
+Wrote 0 leases to leases file.
+PID file: /run/dhcp-server/dhcpd.pid
+Wrote 0 leases to leases file.
+Listening on LPF/br-lab/8e:c1:fb:7f:81:19/192.168.100.0/24
+Listening on LPF/br-lab/8e:c1:fb:7f:81:19/192.168.100.0/24
+Sending on   LPF/br-lab/8e:c1:fb:7f:81:19/192.168.100.0/24
+Sending on   Socket/fallback/fallback-net
+Sending on   LPF/br-lab/8e:c1:fb:7f:81:19/192.168.100.0/24
+Sending on   Socket/fallback/fallback-net
+Server starting service.
+##### 14. ВАРІАНТ 2: спроба отримати адресу
+PC2# dhclient -1 -v -cf /etc/dhcp/dhclient-lab3.conf -lf /var/lib/dhcp/dhclient-lab3.leases -pf /run/dhclient-lab3.pid eth0
+Internet Systems Consortium DHCP Client 4.4.1
+Copyright 2004-2018 Internet Systems Consortium.
+All rights reserved.
+For info, please visit https://www.isc.org/software/dhcp/
+
+Listening on LPF/eth0/32:8e:34:d8:ee:3d
+Sending on   LPF/eth0/32:8e:34:d8:ee:3d
+Sending on   Socket/fallback
+DHCPDISCOVER on eth0 to 255.255.255.255 port 67 interval 3 (xid=0xe2142452)
+DHCPDISCOVER on eth0 to 255.255.255.255 port 67 interval 3 (xid=0xe2142452)
+DHCPDISCOVER on eth0 to 255.255.255.255 port 67 interval 5 (xid=0xe2142452)
+DHCPDISCOVER on eth0 to 255.255.255.255 port 67 interval 10 (xid=0xe2142452)
+No DHCPOFFERS received.
+No working leases in persistent database - sleeping.
+PC2# ip -br addr show eth0
+eth0@if4         UP             
+##### 15. ВАРІАНТ 2: журнал сервера
+PC1# journalctl -u isc-dhcp-server --no-pager -o short --since '2026-11-23 19:28:23' | grep -iE 'DHCP(DISC|OFF|REQ|ACK)|free' | tail -14 | cut -c1-140
+Nov 23 19:28:43 ubuntu-kpi dhcpd[2862]: DHCPDISCOVER from 32:8e:34:d8:ee:3d via br-lab: network 192.168.100.0/24: no free leases
+Nov 23 19:28:46 ubuntu-kpi dhcpd[2862]: DHCPDISCOVER from 32:8e:34:d8:ee:3d via br-lab: network 192.168.100.0/24: no free leases
+Nov 23 19:28:49 ubuntu-kpi dhcpd[2862]: DHCPDISCOVER from 32:8e:34:d8:ee:3d via br-lab: network 192.168.100.0/24: no free leases
+Nov 23 19:28:54 ubuntu-kpi dhcpd[2862]: DHCPDISCOVER from 32:8e:34:d8:ee:3d via br-lab: network 192.168.100.0/24: no free leases
+PC1# grep -c ^lease /var/lib/dhcp/dhcpd.leases
+0
+##### 16. ВАРІАНТ 2: виправлення і повторна перевірка
+PC1# grep range /etc/dhcp/dhcpd.conf
+  range 192.168.100.10 192.168.100.20;
+PC1# systemctl restart isc-dhcp-server
+PC2# dhclient -1 -v -cf /etc/dhcp/dhclient-lab3.conf -lf /var/lib/dhcp/dhclient-lab3.leases -pf /run/dhclient-lab3.pid eth0
+Internet Systems Consortium DHCP Client 4.4.1
+Copyright 2004-2018 Internet Systems Consortium.
+All rights reserved.
+For info, please visit https://www.isc.org/software/dhcp/
+
+Listening on LPF/eth0/32:8e:34:d8:ee:3d
+Sending on   LPF/eth0/32:8e:34:d8:ee:3d
+Sending on   Socket/fallback
+DHCPDISCOVER on eth0 to 255.255.255.255 port 67 interval 3 (xid=0xfef0bd5c)
+DHCPOFFER of 192.168.100.10 from 192.168.100.1
+DHCPREQUEST for 192.168.100.10 on eth0 to 255.255.255.255 port 67 (xid=0x5cbdf0fe)
+DHCPACK of 192.168.100.10 from 192.168.100.1 (xid=0xfef0bd5c)
+bound to 192.168.100.10 -- renewal in 279 seconds.
+PC2# ip -4 addr show eth0
+2: eth0@if4: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default qlen 1000 link-netnsid 0
+    inet 192.168.100.10/24 brd 192.168.100.255 scope global dynamic eth0
+       valid_lft 599sec preferred_lft 599sec
+PC2# ping -c 2 10.20.0.2
+PING 10.20.0.2 (10.20.0.2) 56(84) bytes of data.
+64 bytes from 10.20.0.2: icmp_seq=1 ttl=63 time=0.060 ms
+64 bytes from 10.20.0.2: icmp_seq=2 ttl=63 time=0.149 ms
+
+--- 10.20.0.2 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1925ms
+rtt min/avg/max/mdev = 0.060/0.104/0.149/0.044 ms
+##### 17. Конфлікт двох DHCP-серверів
+PC1# cat /etc/dhcp/dhcpd-pc4.conf
+default-lease-time 600;
+max-lease-time 7200;
+ping-check false;
+option subnet-mask 255.255.255.0;
+option routers 192.168.100.254;
+
+subnet 192.168.100.0 netmask 255.255.255.0 {
+  range 192.168.100.200 192.168.100.210;
+}
+PC1# systemctl is-active isc-dhcp-server
+active
+PC1# tail -5 /run/lab3/pc4.log
+Wrote 0 leases to leases file.
+Listening on LPF/eth0/9a:6b:67:cd:00:b7/192.168.100.0/24
+Sending on   LPF/eth0/9a:6b:67:cd:00:b7/192.168.100.0/24
+Sending on   Socket/fallback/fallback-net
+Server starting service.
+##### 18. Конфлікт: клієнт отримує адресу
+PC2# dhclient -1 -v -cf /etc/dhcp/dhclient-lab3.conf -lf /var/lib/dhcp/dhclient-lab3.leases -pf /run/dhclient-lab3.pid eth0
+Internet Systems Consortium DHCP Client 4.4.1
+Copyright 2004-2018 Internet Systems Consortium.
+All rights reserved.
+For info, please visit https://www.isc.org/software/dhcp/
+
+Listening on LPF/eth0/32:8e:34:d8:ee:3d
+Sending on   LPF/eth0/32:8e:34:d8:ee:3d
+Sending on   Socket/fallback
+DHCPDISCOVER on eth0 to 255.255.255.255 port 67 interval 3 (xid=0x86edb614)
+DHCPOFFER of 192.168.100.200 from 192.168.100.253
+DHCPREQUEST for 192.168.100.200 on eth0 to 255.255.255.255 port 67 (xid=0x14b6ed86)
+DHCPACK of 192.168.100.200 from 192.168.100.253 (xid=0x86edb614)
+bound to 192.168.100.200 -- renewal in 280 seconds.
+PC2# ip -4 addr show eth0
+2: eth0@if4: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default qlen 1000 link-netnsid 0
+    inet 192.168.100.200/24 brd 192.168.100.255 scope global dynamic eth0
+       valid_lft 592sec preferred_lft 592sec
+PC2# ip route
+default via 192.168.100.254 dev eth0 
+192.168.100.0/24 dev eth0 proto kernel scope link src 192.168.100.200 
+PC2# ping -c 2 -W 1 10.20.0.2
+PING 10.20.0.2 (10.20.0.2) 56(84) bytes of data.
+
+--- 10.20.0.2 ping statistics ---
+2 packets transmitted, 0 received, 100% packet loss, time 1051ms
+
+##### 19. Конфлікт: аналіз захоплення
+PC1# tshark -r /home/diana_siukalo/lab3_out/conflict.pcap -Y dhcp -T fields -e frame.number -e frame.time_relative -e ip.src -e dhcp.option.dhcp -e dhcp.ip.your -e dhcp.option.dhcp_server_id -e dhcp.option.router 2>/dev/null
+1	0.000000000	0.0.0.0	1	0.0.0.0		
+3	0.002024000	192.168.100.253	2	192.168.100.200	192.168.100.253	192.168.100.254
+4	0.003290000	0.0.0.0	3	0.0.0.0	192.168.100.253	
+5	0.010523000	192.168.100.253	5	192.168.100.200	192.168.100.253	192.168.100.254
+6	1.024154000	192.168.100.1	2	192.168.100.10	192.168.100.1	192.168.100.1
+PC1# tail -12 /run/lab3/pc4.log
+Config file: /etc/dhcp/dhcpd-pc4.conf
+Database file: /var/lib/dhcp/dhcpd.leases-pc4
+PID file: /run/dhcpd.pid
+Wrote 0 leases to leases file.
+Listening on LPF/eth0/9a:6b:67:cd:00:b7/192.168.100.0/24
+Sending on   LPF/eth0/9a:6b:67:cd:00:b7/192.168.100.0/24
+Sending on   Socket/fallback/fallback-net
+Server starting service.
+DHCPDISCOVER from 32:8e:34:d8:ee:3d via eth0
+DHCPOFFER on 192.168.100.200 to 32:8e:34:d8:ee:3d (pc2-client) via eth0
+DHCPREQUEST for 192.168.100.200 (192.168.100.253) from 32:8e:34:d8:ee:3d (pc2-client) via eth0
+DHCPACK on 192.168.100.200 to 32:8e:34:d8:ee:3d (pc2-client) via eth0
+##### 20. Конфлікт: усунення
+PC2# dhclient -1 -v -cf /etc/dhcp/dhclient-lab3.conf -lf /var/lib/dhcp/dhclient-lab3.leases -pf /run/dhclient-lab3.pid eth0
+Internet Systems Consortium DHCP Client 4.4.1
+Copyright 2004-2018 Internet Systems Consortium.
+All rights reserved.
+For info, please visit https://www.isc.org/software/dhcp/
+
+Listening on LPF/eth0/32:8e:34:d8:ee:3d
+Sending on   LPF/eth0/32:8e:34:d8:ee:3d
+Sending on   Socket/fallback
+DHCPDISCOVER on eth0 to 255.255.255.255 port 67 interval 3 (xid=0x4842f15)
+DHCPOFFER of 192.168.100.10 from 192.168.100.1
+DHCPREQUEST for 192.168.100.10 on eth0 to 255.255.255.255 port 67 (xid=0x152f8404)
+DHCPACK of 192.168.100.10 from 192.168.100.1 (xid=0x4842f15)
+bound to 192.168.100.10 -- renewal in 295 seconds.
+PC2# ip route
+default via 192.168.100.1 dev eth0 
+192.168.100.0/24 dev eth0 proto kernel scope link src 192.168.100.10 
+PC2# ping -c 2 -W 1 10.20.0.2
+PING 10.20.0.2 (10.20.0.2) 56(84) bytes of data.
+64 bytes from 10.20.0.2: icmp_seq=1 ttl=63 time=0.058 ms
+64 bytes from 10.20.0.2: icmp_seq=2 ttl=63 time=0.077 ms
+
+--- 10.20.0.2 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1099ms
+rtt min/avg/max/mdev = 0.058/0.067/0.077/0.009 ms
