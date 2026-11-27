@@ -1,0 +1,35 @@
+##### 21. Визначення DNS-сервера: налаштування системи
+PC1# grep -v '^#' /etc/resolv.conf | sed '/^$/d'
+nameserver 127.0.0.53
+options edns0 trust-ad
+search .
+PC1# resolvectl dns enp0s3
+Link 2 (enp0s3): 192.168.0.1
+##### 22. Визначення DNS-сервера у Wireshark
+PC1$ curl -s -o /dev/null -w 'kpi.ua: HTTP %{http_code}\n' http://kpi.ua
+kpi.ua: HTTP 301
+PC1$ curl -s -o /dev/null -w 'google.com: HTTP %{http_code}\n' http://google.com
+google.com: HTTP 301
+##### 23. Аналіз DNS-запитів (tshark)
+PC1# tshark -r /home/diana_siukalo/lab3_out/dns.pcap -Y dns -T fields -e frame.number -e ip.src -e ip.dst -e dns.flags.response -e dns.qry.name -e dns.a 2>/dev/null | head -12
+1	10.0.2.15	192.168.0.1	0	kpi.ua	
+2	10.0.2.15	192.168.0.1	0	kpi.ua	
+3	192.168.0.1	10.0.2.15	1	kpi.ua	80.91.164.19
+4	192.168.0.1	10.0.2.15	1	kpi.ua	
+5	10.0.2.15	192.168.0.1	0	google.com	
+6	10.0.2.15	192.168.0.1	0	google.com	
+7	192.168.0.1	10.0.2.15	1	google.com	142.250.109.100,142.250.109.102,142.250.109.101,142.250.109.113,142.250.109.138,142.250.109.139
+8	192.168.0.1	10.0.2.15	1	google.com	
+DNS-сервер, на який VM надсилає запити: 192.168.0.1
+##### 24. DNS у dhcpd.conf та перевірка на клієнті
+PC1# grep domain-name-servers /etc/dhcp/dhcpd.conf
+option domain-name-servers 192.168.0.1, 8.8.8.8;
+PC1# systemctl restart isc-dhcp-server && systemctl is-active isc-dhcp-server
+active
+PC2# dhclient -1 -cf /etc/dhcp/dhclient-lab3.conf -lf /var/lib/dhcp/dhclient-lab3.leases -pf /run/dhclient-lab3.pid eth0 && grep -m1 domain-name-servers /var/lib/dhcp/dhclient-lab3.leases
+  option domain-name-servers 192.168.0.1,8.8.8.8;
+PC2# nslookup kpi.ua 192.168.0.1 | tail -4
+
+Name:	kpi.ua
+Address: 80.91.164.19
+

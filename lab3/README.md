@@ -19,6 +19,7 @@ sudo bash lab3.sh
 3. `ping`, `traceroute`, таблиці маршрутизації, troubleshooting
 4. **Варіант 2:** конфігурація без `range` → сервер `active`, але адрес не видає (`no free leases`)
 5. **Додатково:** конфлікт двох DHCP-серверів
+6. Визначення DNS-сервера у Wireshark (`dns.sh`) і передача його клієнтам через `option domain-name-servers`
 
 ## Результати тестування
 | ID | Перевірка | Результат |
@@ -31,8 +32,9 @@ sudo bash lab3.sh
 
 ## Файли
 - `lab3.sh` — скрипт виконання
+- `dns.sh` — визначення DNS-сервера
 - `config/` — конфігурації DHCP-серверів
 - `pcap/` — захоплення трафіку
 - `screenshots/` — схеми та скриншоти
-- `log.txt`, `pc4.log` — журнали виконання
+- `log.txt`, `pc4.log`, `dns_log.txt` — журнали виконання
 - `Лаб3_DHCP_Сюкало_ІО-34.docx` — звіт
